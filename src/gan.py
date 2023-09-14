@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torch import nn
+from pathlib import Path
 
 from matplotlib import pyplot
 from torchvision.datasets import MNIST
@@ -11,10 +12,11 @@ from models import Discriminator, Generator
 def save_plot(samples, epoch):
     for i in range(16):
         ax = pyplot.subplot(4, 4, i + 1)
-        pyplot.imshow(samples[i].detach().reshape(28, 28), cmap="gray_r")
+        pyplot.imshow(samples[i].cpu().detach().reshape(28, 28), cmap="gray_r")
         pyplot.xticks([])
         pyplot.yticks([])
-    filename = 'plots/epoch%03d.png' % (epoch+1)
+    filename = 'plots/epoch%03d.png' % (epoch)
+    Path("plots").mkdir(parents=False, exist_ok=True)
     pyplot.savefig(filename)
     pyplot.close()
 
@@ -84,7 +86,7 @@ def main(batch_size = 32, num_epochs = 50):
                 print(f"Epoch: {epoch}, Step: {n}, Loss G: {loss_generator}")
 
             # save sample images of Generator every five rounds
-            if epoch % 5 == 0 and n == 0:
+            if (epoch+1) % 5 == 0 and n == 0:
                 latent_space_samples = torch.randn((batch_size, 100)).to(device=device)
                 generated_samples = generator(latent_space_samples)
                 save_plot(generated_samples, epoch)
