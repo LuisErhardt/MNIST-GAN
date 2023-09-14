@@ -1,5 +1,6 @@
 .DS_Store
 MNIST
+plots
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

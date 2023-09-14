@@ -2,11 +2,10 @@ import torch
 from torch.utils.data import DataLoader
 from torch import nn
 from pathlib import Path
-
+import argparse
 from matplotlib import pyplot
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
-
 from models import Discriminator, Generator
 
 def save_plot(samples, epoch):
@@ -25,7 +24,7 @@ def download_MNIST_data():
     train_set = MNIST(root=".", train=True, download=True, transform=transform)
     return train_set
 
-def main(batch_size = 32, num_epochs = 50):
+def main(batch_size, num_epochs):
     torch.manual_seed(111)
 
     device = ""
@@ -92,4 +91,13 @@ def main(batch_size = 32, num_epochs = 50):
                 save_plot(generated_samples, epoch)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-batch_size", type=int, default=32
+    )
+    parser.add_argument(
+        "-epochs", type=int, default=50
+    )
+    args = parser.parse_args()
+
+    main(args.batch_size, args.epochs)
