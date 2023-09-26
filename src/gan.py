@@ -7,7 +7,6 @@ from matplotlib import pyplot
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
 from models import Discriminator, Generator
-import json
 
 def save_plot(samples, epoch):
     for i in range(16):
@@ -15,11 +14,16 @@ def save_plot(samples, epoch):
         pyplot.imshow(samples[i].cpu().detach().reshape(28, 28), cmap="gray_r")
         pyplot.xticks([])
         pyplot.yticks([])
-    filename = 'plots/epoch%03d.png' % (epoch)
-    Path("plots").mkdir(parents=False, exist_ok=True)
+    filename = 'plots/gan/epoch%03d.png' % (epoch)
+    Path("plots/gan").mkdir(parents=True, exist_ok=True)
     pyplot.savefig(filename)
     pyplot.close()
 
+def save_Discriminator_models(epoch, discriminator):
+        dir = 'savedModels/gan/epoch{}'.format(epoch)
+        Path(dir).mkdir(parents=True, exist_ok=True)
+        PATH = dir + '/Discriminator_state_dict_model.pt'.format(id)
+        torch.save(discriminator.state_dict(), PATH)
 
 def main(batch_size, num_epochs):
     torch.manual_seed(111)
@@ -49,10 +53,6 @@ def main(batch_size, num_epochs):
     optimizer_generator = torch.optim.Adam(generator.parameters(), lr=lr)
 
     print("Start Training")
-
-
-    probs_train = []
-    probs_test = []
 
     for epoch in range(num_epochs):
         for n, (real_samples, _) in enumerate(train_loader):
@@ -97,37 +97,9 @@ def main(batch_size, num_epochs):
                 generated_samples = generator(latent_space_samples)
                 save_plot(generated_samples, epoch)
 
-        # compare discriminator's probalilty outputs of test data and train data
-        # -> detects overfitting
-        discriminator.eval()
-
-        test_samples, _ = next(iter(test_loader))
-        test_samples = test_samples.to(device=device)
-
-        test_output = discriminator(test_samples)
-        # print(test_output)
-        test_mean_probability = torch.mean(test_output)
-        probs_test.append(test_mean_probability.item())
-
-        train_samples, _ = next(iter(train_loader))
-        train_samples = train_samples.to(device=device)
-
-        train_output = discriminator(train_samples)
-        # print(train_output)
-        train_mean_probability = torch.mean(train_output)
-        probs_train.append(train_mean_probability.item())
-    
-        print(f"End of {epoch}, test probability: {test_mean_probability}, train probability: {train_mean_probability}")
-
-        discriminator.train()
-    
-    # save probabilities to file
-    probs = {}
-    probs["test_probs"] = probs_test
-    probs["train_probs"] = probs_train
-    probs["epochs"] = num_epochs
-    
-    json.dump(probs, open("probs.json", 'w' ))
+            # save discriminator models every 10 rounds
+            if (epoch+1) % 10 == 0:
+                save_Discriminator_models(epoch, discriminator)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
