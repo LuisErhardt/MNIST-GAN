@@ -97,8 +97,8 @@ def main(batch_size, num_epochs):
                 generated_samples = generator(latent_space_samples)
                 save_plot(generated_samples, epoch)
 
-            # save discriminator models every 10 rounds
-            if (epoch+1) % 10 == 0:
+            # save discriminator models every 5 rounds
+            if (epoch+1) % 5 == 0:
                 save_Discriminator_models(epoch, discriminator)
 
 if __name__ == '__main__':
