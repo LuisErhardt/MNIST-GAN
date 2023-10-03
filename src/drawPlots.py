@@ -13,3 +13,16 @@ def plot_D_probabilities(epochs, probs_test, probs_train):
     Path("plots").mkdir(parents=False, exist_ok=True)
     pyplot.savefig(filename)
     pyplot.close()
+
+def plot_accuracy(epochs, accuracy, random):
+    print("Plot accuracy")
+    fig, ax = pyplot.subplots()
+    ax.plot(epochs, accuracy, 'r', label='GAN')
+    ax.plot(epochs, random, 'b', label='zufällig')
+    ax.legend()
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Genauigkeit')
+    filename = 'plots/gan_accuracy.png'
+    Path("plots").mkdir(parents=False, exist_ok=True)
+    pyplot.savefig(filename)
+    pyplot.close()
