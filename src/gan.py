@@ -26,7 +26,7 @@ def save_Discriminator_models(epoch, discriminator):
         torch.save(discriminator.state_dict(), PATH)
 
 def main(batch_size, num_epochs):
-    torch.manual_seed(111)
+    # torch.manual_seed(111)
 
     device = ""
     if torch.cuda.is_available():
