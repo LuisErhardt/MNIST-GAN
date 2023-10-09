@@ -7,9 +7,9 @@ from matplotlib import pyplot
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
 from models import Discriminator, Generator
-import json
 import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
+import random
 
 def save_plot(samples, epoch):
     for i in range(16):
@@ -29,56 +29,13 @@ class Client():
         self.loss_function = loss_function
         self.device = device
         self.data_loader = train_set_loader
+        self.lr = lr
 
         self.discriminator = Discriminator().to(device=self.device)
-        self.optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=lr)
+        self.initialize_optimizer()
 
-        self.probs_train = []
-        self.probs_test = []
-
-        # sets for inference
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-        train_set = MNIST(root=".", train=True, download=True, transform=transform)
-        test_set = MNIST(root=".", train=False, download=True, transform=transform)
-
-        self.train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-        self.test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
-
-
-    def save_probs_to_file(self, client):
-
-        probs = {}
-        probs["test_probs"] = self.probs_test
-        probs["train_probs"] = self.probs_train
-        probs["epochs"] = self.num_epochs
-    
-        json.dump(probs, open("client{}_probs.json".format(client), 'w' ))
-
-    def add_probs_to_lists(self, epoch, client):
-
-        # compare discriminator's probalilty outputs of test data and train data
-        # -> detects overfitting
-        self.discriminator.eval()
-
-        test_samples, _ = next(iter(self.test_loader))
-        test_samples = test_samples.to(device=self.device)
-
-        test_output = self.discriminator(test_samples)
-        # print(test_output)
-        test_mean_probability = torch.mean(test_output)
-        self.probs_test.append(test_mean_probability.item())
-
-        train_samples, _ = next(iter(self.train_loader))
-        train_samples = train_samples.to(device=self.device)
-
-        train_output = self.discriminator(train_samples)
-        # print(train_output)
-        train_mean_probability = torch.mean(train_output)
-        self.probs_train.append(train_mean_probability.item())
-    
-        print(f"End of {epoch}, Client {client}, test probability: {test_mean_probability}, train probability: {train_mean_probability}")
-
-        self.discriminator.train()
+    def initialize_optimizer(self):
+        self.optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=self.lr)
 
     def train(self, server, client):
         for n, (real_samples, _) in enumerate(self.data_loader):
@@ -104,7 +61,7 @@ class Client():
             self.optimizer_discriminator.step()
 
             # Train the generators
-            first_loss_generator_avg = server.train_Generator()
+            # first_loss_generator_avg = server.train_Generator()
             loss_generator_avg = server.train_Generator()
 
 
@@ -112,13 +69,18 @@ class Client():
             if n % 10 == 0:
                 print(f"Step {n}")
                 print(f"Loss D {client}: {loss_discriminator}")
-                print(f"Loss G avg 1. train: {first_loss_generator_avg}")
-                print(f"Loss G avg 2. train: {loss_generator_avg}")
+                # print(f"Loss G avg 1. train: {first_loss_generator_avg}")
+                print(f"Loss G avg: {loss_generator_avg}")
             
         
 class Server():
-    def __init__(self, batch_size, num_epochs, num_clients, **kwargs):
+    def __init__(self, batch_size, num_epochs, num_clients, swap, **kwargs):
         print("init Server")
+        if swap:
+            print("Swap")
+        else: 
+            print("No swap")
+
         torch.manual_seed(111)
 
         self.batch_size = batch_size
@@ -126,6 +88,7 @@ class Server():
         lr = 0.0001
         self.loss_function = nn.BCELoss()
         self.num_clients = num_clients
+        self.enableSwap = swap
 
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
@@ -203,18 +166,54 @@ class Server():
 
         return loss_generator_avg
         
+    def swap(self):
+        if self.num_clients < 2:
+            print("No swap, less than 2 clients")
+            pass
+
+        # save models temporarily
+        models = []
+        for client in self.client_list:
+             model_stat_dict = client.discriminator.state_dict()
+             models.append(model_stat_dict)
+
+        # for each client, select another client randomly where it should send its weights
+        clients = list(range(self.num_clients))
+        random.shuffle(clients)
+        pairs = []
+        for i in range(0, self.num_clients):
+            if i + 1 < self.num_clients:
+                pair = [clients[i], clients[i + 1]]
+                pairs.append(pair)
+            else:
+                pair = [clients[i], clients[0]]
+                pairs.append(pair)
+
+        print(pairs)
+
+        # swap models
+        for pair in pairs:
+            sender = pair[0]
+            receiver = pair[1]
+            
+            print(f"Send D{sender} to D{receiver}")
+            self.client_list[receiver].discriminator.load_state_dict(models[sender])
+            self.client_list[receiver].initialize_optimizer()
+
+
     def run(self):
         print("run main")
 
         for epoch in range(self.num_epochs):
             print("Epoch", epoch)
 
+            # swap D weights every 10 rounds
+            if self.enableSwap and (epoch+1) % 10 == 0:
+                self.swap()
+
             # Train all discriminators
             for i, client in enumerate(self.client_list):
                 client.train(self, i)
-
-            # Training the generator
-            # loss_generator = self.train_Generator()
 
             # save sample images of Generator every five rounds
             if (epoch+1) % 5 == 0:
@@ -225,10 +224,6 @@ class Server():
             # save discriminator models every 5 rounds
             if (epoch+1) % 5 == 0:
                 self.save_Discriminator_models(epoch)
-
-        # at the end
-        # for i, client in enumerate(self.client_list):
-        #         client.save_probs_to_file(i)
 
 
 if __name__ == '__main__':
@@ -242,8 +237,11 @@ if __name__ == '__main__':
     parser.add_argument(
         "-clients", type=int, default=5
     )
+    parser.add_argument(
+        "-swap", action='store_true'
+    )
     args = parser.parse_args()
 
-    Server = Server(args.batch_size, args.epochs, args.clients)
+    Server = Server(args.batch_size, args.epochs, args.clients, args.swap)
 
     Server.run()
