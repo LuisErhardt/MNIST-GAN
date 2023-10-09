@@ -10,6 +10,7 @@ from models import Discriminator, Generator
 import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 import random
+import json
 
 def save_plot(samples, epoch):
     for i in range(16):
@@ -23,22 +24,33 @@ def save_plot(samples, epoch):
     pyplot.close()
 
 class Client():
-    def __init__(self, batch_size, num_epochs, device, lr, loss_function, train_set_loader, **kwargs):
+    def __init__(self, batch_size, num_epochs, device, lr, loss_function, indices, **kwargs):
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.loss_function = loss_function
         self.device = device
-        self.data_loader = train_set_loader
         self.lr = lr
+        self.indices = indices
+
+        self.createDataLoader()
 
         self.discriminator = Discriminator().to(device=self.device)
         self.initialize_optimizer()
+
+    def createDataLoader(self):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        train_set = MNIST(root=".", train=True, download=True, transform=transform)
+
+        sampler = SubsetRandomSampler(self.indices)
+        dataLoader = DataLoader(train_set, self.batch_size, sampler=sampler)
+
+        self.dataLoader = dataLoader
 
     def initialize_optimizer(self):
         self.optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=self.lr)
 
     def train(self, server, client):
-        for n, (real_samples, _) in enumerate(self.data_loader):
+        for n, (real_samples, _) in enumerate(self.dataLoader):
             sample_size = len(real_samples)
             
             # Data for training the discriminator
@@ -61,15 +73,11 @@ class Client():
             self.optimizer_discriminator.step()
 
             # Train the generators
-            # first_loss_generator_avg = server.train_Generator()
             loss_generator_avg = server.train_Generator()
 
-
             # Show loss
-            if n % 10 == 0:
-                print(f"Step {n}")
+            if n == 300:
                 print(f"Loss D {client}: {loss_discriminator}")
-                # print(f"Loss G avg 1. train: {first_loss_generator_avg}")
                 print(f"Loss G avg: {loss_generator_avg}")
             
         
@@ -98,11 +106,11 @@ class Server():
         self.generator = Generator().to(device=self.device)
         self.optimizer_generator = torch.optim.Adam(self.generator.parameters(), lr=lr)
 
-        dataLoaders = self.split_dataset()
+        indice_lists = self.split_dataset()
 
         self.client_list= []
         for n in range(num_clients):
-            client = Client(self.batch_size, self.num_epochs, self.device, lr, self.loss_function, dataLoaders[n])
+            client = Client(self.batch_size, self.num_epochs, self.device, lr, self.loss_function, indice_lists[n])
             self.client_list.append(client)
             print("Added Client", n)
 
@@ -134,13 +142,12 @@ class Server():
         # create lists of the split indices
         indice_lists = [indices[i:i + split] for i in range(0, dataset_size, split)]
 
-        # create samplers from indice lists
-        samplers = [SubsetRandomSampler(indices) for indices in indice_lists]
-        
-        # create DataLoaders from samplers
-        dataLoaders = [DataLoader(train_set, self.batch_size, sampler=sampler) for sampler in samplers]
+        # save indices to file
+        with open("indices.json", 'w') as output_file:
+            json.dump(indice_lists, output_file, indent=2)
 
-        return dataLoaders
+        return indice_lists
+        
 
     def train_Generator(self):
         # Data for training the generator
@@ -155,12 +162,9 @@ class Server():
             generated_samples = self.generator(latent_space_samples)
             output_discriminator_generated = client.discriminator(generated_samples)
             loss_generator = self.loss_function(output_discriminator_generated, real_samples_labels)
-            ### ???? add all losses
             losses += loss_generator
-        ### ???? calculate the average of the losses
-        #print("loss_generator_avg before:", losses)
+        ###  calculate the average of the losses
         loss_generator_avg = losses / (len(self.client_list))
-        #print("loss_generator_avg after:", loss_generator_avg)
         loss_generator_avg.backward()
         self.optimizer_generator.step()
 
@@ -171,11 +175,11 @@ class Server():
             print("No swap, less than 2 clients")
             pass
 
-        # save models temporarily
-        models = []
+        # save indice lists temporarily
+        indice_lists = []
         for client in self.client_list:
-             model_stat_dict = client.discriminator.state_dict()
-             models.append(model_stat_dict)
+             indices = client.indices
+             indice_lists.append(indices)
 
         # for each client, select another client randomly where it should send its weights
         clients = list(range(self.num_clients))
@@ -189,16 +193,14 @@ class Server():
                 pair = [clients[i], clients[0]]
                 pairs.append(pair)
 
-        print(pairs)
-
-        # swap models
+        # swap datasets
         for pair in pairs:
             sender = pair[0]
             receiver = pair[1]
-            
+
             print(f"Send D{sender} to D{receiver}")
-            self.client_list[receiver].discriminator.load_state_dict(models[sender])
-            self.client_list[receiver].initialize_optimizer()
+            self.client_list[receiver].indices = indice_lists[sender]
+            self.client_list[receiver].createDataLoader()
 
 
     def run(self):
@@ -207,7 +209,7 @@ class Server():
         for epoch in range(self.num_epochs):
             print("Epoch", epoch)
 
-            # swap D weights every 10 rounds
+            # swap D datasets every 10 rounds
             if self.enableSwap and (epoch+1) % 10 == 0:
                 self.swap()
 
