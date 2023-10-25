@@ -15,14 +15,15 @@ def plot_D_probabilities(epochs, probs_test, probs_train):
     pyplot.savefig(filename)
     pyplot.close()
 
-def plot_accuracy(epochs, accuracy, random, function, path, gan_type):
+def plot_accuracy(num_epochs, accuracy, random, function, path, gan_type):
     print("Plot accuracy")
+
+    epochs = np.arange(0, num_epochs, 5)
 
     fig, ax = pyplot.subplots()
     ax.plot(epochs, accuracy, 'r', label=gan_type)
     ax.plot(epochs, random, 'b', label='zufällig')
-    t = np.arange(0, 500, 5)
-    ax.plot(t, function(t), 'g', label="Trend")
+    ax.plot(epochs, function(epochs), 'g', label="Trend")
     ax.legend()
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Genauigkeit')
