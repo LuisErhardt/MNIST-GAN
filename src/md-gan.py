@@ -72,7 +72,7 @@ class Client():
             loss_discriminator.backward()
             self.optimizer_discriminator.step()
 
-            # Train the generators
+            # Train the generator
             loss_generator_avg = server.train_Generator()
 
             # Show loss
@@ -119,6 +119,7 @@ class Server():
         Path(dir).mkdir(parents=True, exist_ok=True)
         for id, client in enumerate(self.client_list):
             PATH = dir + '/Discriminator{}_state_dict_model.pt'.format(id)
+            print("Save", PATH)
             torch.save(client.discriminator.state_dict(), PATH)
 
     def split_dataset(self):
@@ -163,7 +164,7 @@ class Server():
             output_discriminator_generated = client.discriminator(generated_samples)
             loss_generator = self.loss_function(output_discriminator_generated, real_samples_labels)
             losses += loss_generator
-        ###  calculate the average of the losses
+        #  calculate the average of the losses
         loss_generator_avg = losses / (len(self.client_list))
         loss_generator_avg.backward()
         self.optimizer_generator.step()
@@ -217,15 +218,15 @@ class Server():
             for i, client in enumerate(self.client_list):
                 client.train(self, i)
 
+            # save discriminator models every 5 rounds
+            if (epoch+1) % 5 == 0:
+                self.save_Discriminator_models(epoch)
+
             # save sample images of Generator every five rounds
             if (epoch+1) % 5 == 0:
                 latent_space_samples = torch.randn((self.batch_size, 100)).to(device=self.device)
                 generated_samples = self.generator(latent_space_samples)
                 save_plot(generated_samples, epoch)
-
-            # save discriminator models every 5 rounds
-            if (epoch+1) % 5 == 0:
-                self.save_Discriminator_models(epoch)
 
 
 if __name__ == '__main__':

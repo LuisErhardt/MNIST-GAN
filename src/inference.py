@@ -69,9 +69,7 @@ class Inference():
             print("Train output:")
             print(train_mean)
 
-
             # load samples from test set
-            test_samples = []
             test_loader = DataLoader(self.test_set, batch_size=n_test, shuffle=True)
             test_samples, _ = next(iter(test_loader))
 
@@ -106,7 +104,6 @@ class Inference():
             print("Number of 1s (from train set):", num_of_ones)
             print("Number of 0s (from test set):", num_of_zeros)
             print("Accuracy:", accuracy)
-            print("Random guessing accuracy:", guessing_accuracy)
 
 
         acc_train = []
@@ -115,30 +112,27 @@ class Inference():
         n_total = n_train + n_test
         guessing_accuracy = n_train / n_total
 
-        dirs = os.listdir(dir_with_models)
+        dirs = os.listdir(os.path.join(dir_with_models, 'savedModels'))
 
         for dir in dirs:
-            path = os.path.join(dir_with_models, dir, "Discriminator{}_state_dict_model.pt".format(clientID))
+            path = os.path.join(os.path.join(dir_with_models, 'savedModels'), dir, "Discriminator{}_state_dict_model.pt".format(clientID))
             mia_on_model(self, path)
 
         # compute polyfit (for trend)
         x = np.arange(0, num_epochs, 5)
         y = np.array(acc_train)
-        z = np.polyfit(x, y, 1)
+        z = np.polyfit(x, y, 2)
         p = np.poly1d(z)
         print(p)
 
-        acc = {}
-        acc["accuracy"] = acc_train
-        acc["random"] = [guessing_accuracy for i in range(num_epochs) if (i+1) % 5 == 0]
-        acc["epochs"] = np.arange(0, num_epochs, 5)
+        random_guessing = [guessing_accuracy for i in range(num_epochs) if (i+1) % 5 == 0]
 
         if swap:
-            filename = 'plots/md-gan_swap_accuracy_D{}.png'.format(clientID)
+            filename = os.path.join(dir_with_models, 'md-gan_swap_accuracy_D{}.png'.format(clientID))
         else:
-            filename = 'plots/md-gan_swap_accuracy_D{}.png'.format(clientID)
+            filename = os.path.join(dir_with_models, 'md-gan_no_swap_accuracy_D{}.png'.format(clientID))
 
-        plot_accuracy(acc["epochs"], acc["accuracy"], acc["random"], p, filename, 'MD-GAN')
+        plot_accuracy(num_epochs, acc_train, random_guessing, p, filename, 'MD-GAN')
 
         
     def membership_inference_attack_gan(self, dir_with_models, num_epochs):
@@ -204,7 +198,6 @@ class Inference():
             print("Number of 1s (from train set):", num_of_ones)
             print("Number of 0s (from test set):", num_of_zeros)
             print("Accuracy:", accuracy)
-            print("Random guessing accuracy:", guessing_accuracy)
 
 
         acc_train = []
@@ -213,25 +206,24 @@ class Inference():
         n_total = n_train + n_test
         guessing_accuracy = n_train / n_total
 
-        dirs = os.listdir(dir_with_models)
+        dirs = os.listdir(os.path.join(dir_with_models, 'savedModels'))
 
         for dir in dirs:
-            path = os.path.join(dir_with_models, dir, "Discriminator_state_dict_model.pt")
+            tmp_path = os.path.join(dir_with_models, 'savedModels', dir)
+            path = os.path.join(tmp_path, os.listdir(tmp_path)[0])
             mia_on_model(self, path)
 
         # compute polyfit (for trend)
         x = np.arange(0, num_epochs, 5)
         y = np.array(acc_train)
-        z = np.polyfit(x, y, 1)
+        z = np.polyfit(x, y, 2)
         p = np.poly1d(z)
         print(p)
 
-        acc = {}
-        acc["accuracy"] = acc_train
-        acc["random"] = [guessing_accuracy for i in range(num_epochs) if (i+1) % 5 == 0]
-        acc["epochs"] = np.arange(0, num_epochs, 5)
+        random_guessing = [guessing_accuracy for i in range(num_epochs) if (i+1) % 5 == 0]
+        file_path = os.path.join(dir_with_models, 'gan_accuracy.png')
 
-        plot_accuracy(acc["epochs"], acc["accuracy"], acc["random"], p, 'plots/gan_accuracy.png', 'GAN')
+        plot_accuracy(num_epochs, acc_train, random_guessing, p, file_path, 'GAN')
 
 
     def save_graph_with_probabilities(self, dir_with_models, num_epochs):
