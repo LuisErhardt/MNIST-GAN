@@ -4,7 +4,7 @@ from torch import nn
 from pathlib import Path
 import argparse
 from matplotlib import pyplot
-from torchvision.datasets import MNIST
+from torchvision.datasets import MNIST, FashionMNIST
 import torchvision.transforms as transforms
 from models import Discriminator, Generator
 
@@ -20,13 +20,13 @@ def save_plot(samples, epoch):
     pyplot.close()
 
 def save_Discriminator_models(epoch, discriminator):
-        dir = 'savedModels/gan/epoch{}'.format(epoch)
+        dir = f'savedModels/gan/epoch{epoch:03}'
         Path(dir).mkdir(parents=True, exist_ok=True)
         PATH = dir + '/Discriminator_state_dict_model.pt'.format(id)
         torch.save(discriminator.state_dict(), PATH)
 
-def main(batch_size, num_epochs):
-    # torch.manual_seed(111)
+def main(batch_size, num_epochs, dataset, subClass):
+    torch.manual_seed(111)
 
     device = ""
     if torch.cuda.is_available():
@@ -34,13 +34,26 @@ def main(batch_size, num_epochs):
     else:
         device = torch.device("cpu")
 
-    # download MNIST data
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    train_set = MNIST(root=".", train=True, download=True, transform=transform)
-    test_set = MNIST(root=".", train=False, download=True, transform=transform)
+    print(dataset)
+
+    if dataset == "MNIST":
+
+        # download MNIST data
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        train_set = MNIST(root=".", train=True, download=True, transform=transform)
+
+    if dataset == "Fashion":
+        # download Fashion MNIST data
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        train_set = FashionMNIST(root=".", train=True, download=True, transform=transform)
+
+    if subClass != None:
+        # select only data from specific class
+        idx = train_set.targets == subClass
+        train_set.targets = train_set.targets[idx]
+        train_set.data = train_set.data[idx]
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
 
     # initialize models
     discriminator = Discriminator().to(device=device)
@@ -56,14 +69,16 @@ def main(batch_size, num_epochs):
 
     for epoch in range(num_epochs):
         for n, (real_samples, _) in enumerate(train_loader):
+            sample_size = len(real_samples)
+
             # Data for training the discriminator
             real_samples = real_samples.to(device=device)
-            real_samples_labels = torch.ones((batch_size, 1)).to(device=device)
+            real_samples_labels = torch.ones((sample_size, 1)).to(device=device)
 
-            latent_space_samples = torch.randn((batch_size, 100)).to(device=device)
+            latent_space_samples = torch.randn((sample_size, 100)).to(device=device)
 
             generated_samples = generator(latent_space_samples)
-            generated_samples_labels = torch.zeros((batch_size, 1)).to(device=device)
+            generated_samples_labels = torch.zeros((sample_size, 1)).to(device=device)
 
             all_samples = torch.cat((real_samples, generated_samples))
             all_samples_labels = torch.cat((real_samples_labels, generated_samples_labels))
@@ -82,6 +97,7 @@ def main(batch_size, num_epochs):
             generator.zero_grad()
             generated_samples = generator(latent_space_samples)
             output_discriminator_generated = discriminator(generated_samples)
+            real_samples_labels = torch.ones((batch_size, 1)).to(device=device)
             loss_generator = loss_function(output_discriminator_generated, real_samples_labels)
             loss_generator.backward()
             optimizer_generator.step()
@@ -109,6 +125,12 @@ if __name__ == '__main__':
     parser.add_argument(
         "-epochs", type=int, default=50
     )
+    parser.add_argument(
+        "-dataset", type=str, default="MNIST"
+    )
+    parser.add_argument(
+        "-subClass", type=int
+    )
     args = parser.parse_args()
 
-    main(args.batch_size, args.epochs)
+    main(args.batch_size, args.epochs, args.dataset, args.subClass)
