@@ -19,9 +19,11 @@ class Inference():
     # must also be run on a system with a gpu!
     #------------------------------------------------
 
-    def __init__(self, dataset, subClass, num_epochs):
+    def __init__(self, dataset, subClass, num_epochs, trend):
 
         self.num_epochs = num_epochs
+        self.trend = trend
+
         print(dataset)
 
         if dataset == "MNIST":
@@ -139,7 +141,7 @@ class Inference():
             path = os.path.join(os.path.join(dir_with_models, 'savedModels'), dir, "Discriminator{}_state_dict_model.pt".format(clientID))
             mia_on_model(self, path)
 
-        if swap:
+        if not self.trend:
             p = None
         else:
             # compute polyfit (for trend)
@@ -152,9 +154,9 @@ class Inference():
         random_guessing = [guessing_accuracy for i in range(self.num_epochs) if (i+1) % 5 == 0]
 
         if swap:
-            filename = os.path.join(dir_with_models, 'md-gan_swap_accuracy_D{}.png'.format(clientID))
+            filename = os.path.join(dir_with_models, 'md-gan_swap_accuracy_D{}.pdf'.format(clientID))
         else:
-            filename = os.path.join(dir_with_models, 'md-gan_no_swap_accuracy_D{}.png'.format(clientID))
+            filename = os.path.join(dir_with_models, 'md-gan_no_swap_accuracy_D{}.pdf'.format(clientID))
 
         plot_accuracy(self.num_epochs, accuracies, random_guessing, p, filename, 'MD-GAN')
 
@@ -236,16 +238,19 @@ class Inference():
             path = os.path.join(tmp_path, os.listdir(tmp_path)[0])
             mia_on_model(self, path)
 
-        # compute polyfit (for trend)
-        x = np.arange(0, self.num_epochs, 5)
-        y = np.array(accuracies)
-        z = np.polyfit(x, y, 2)
-        p = np.poly1d(z)
-        print(p)
+        if not self.trend:
+            p = None
+        else:
+            # compute polyfit (for trend)
+            x = np.arange(0, self.num_epochs, 5)
+            y = np.array(accuracies)
+            z = np.polyfit(x, y, 2)
+            p = np.poly1d(z)
+            print(p)
 
         # plot accuracy values
         random_guessing = [guessing_accuracy for i in range(self.num_epochs) if (i+1) % 5 == 0]
-        file_path = os.path.join(dir_with_models, 'gan_accuracy.png')
+        file_path = os.path.join(dir_with_models, 'gan_accuracy.pdf')
         plot_accuracy(self.num_epochs, accuracies, random_guessing, p, file_path, 'GAN')
 
 
@@ -270,9 +275,12 @@ if __name__ == '__main__':
     parser.add_argument(
         "-subClass", type=int
     )
+    parser.add_argument(
+        "-trend", action='store_true'
+    )
     args = parser.parse_args()
 
-    inference = Inference(args.dataset, args.subClass, args.numEpochs)
+    inference = Inference(args.dataset, args.subClass, args.numEpochs, args.trend)
 
     if args.numClients == 1:
         inference.membership_inference_attack_gan(args.pathToModel)

@@ -8,7 +8,7 @@ def plot_accuracy(num_epochs, accuracy, random, function, path, gan_type):
     epochs = np.arange(0, num_epochs, 5)
 
     fig, ax = pyplot.subplots()
-    ax.set_ylim([0, 1])
+    ax.set_ylim([0, 0.8])
     ax.plot(epochs, accuracy, 'r', label=gan_type)
     ax.plot(epochs, random, 'b', label='zufällig')
     if function:
