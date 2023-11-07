@@ -4,7 +4,7 @@ from torch import nn
 from pathlib import Path
 import argparse
 from matplotlib import pyplot
-from torchvision.datasets import MNIST
+from torchvision.datasets import MNIST, FashionMNIST
 import torchvision.transforms as transforms
 from models import Discriminator, Generator
 import numpy as np
@@ -24,13 +24,15 @@ def save_plot(samples, epoch):
     pyplot.close()
 
 class Client():
-    def __init__(self, batch_size, num_epochs, device, lr, loss_function, indices, **kwargs):
+    def __init__(self, batch_size, num_epochs, device, lr, loss_function, indices, dataset, subClass):
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.loss_function = loss_function
         self.device = device
         self.lr = lr
         self.indices = indices
+        self.dataset = dataset
+        self.subClass = subClass
 
         self.createDataLoader()
 
@@ -38,8 +40,22 @@ class Client():
         self.initialize_optimizer()
 
     def createDataLoader(self):
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-        train_set = MNIST(root=".", train=True, download=True, transform=transform)
+        if self.dataset == "MNIST":
+
+            # download MNIST data
+            transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+            train_set = MNIST(root=".", train=True, download=True, transform=transform)
+
+        if self.dataset == "Fashion":
+            # download Fashion MNIST data
+            transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+            train_set = FashionMNIST(root=".", train=True, download=True, transform=transform)
+
+        if self.subClass != None:
+            # select only data from specific class
+            idx = train_set.targets == self.subClass
+            train_set.targets = train_set.targets[idx]
+            train_set.data = train_set.data[idx]
 
         sampler = SubsetRandomSampler(self.indices)
         dataLoader = DataLoader(train_set, self.batch_size, sampler=sampler)
@@ -76,13 +92,13 @@ class Client():
             loss_generator_avg = server.train_Generator()
 
             # Show loss
-            if n == 300:
+            if n == 0:
                 print(f"Loss D {client}: {loss_discriminator}")
                 print(f"Loss G avg: {loss_generator_avg}")
             
         
 class Server():
-    def __init__(self, batch_size, num_epochs, num_clients, swap, **kwargs):
+    def __init__(self, batch_size, num_epochs, num_clients, swap, dataset, subClass):
         print("init Server")
         if swap:
             print("Swap")
@@ -91,6 +107,9 @@ class Server():
 
         torch.manual_seed(111)
 
+        print(dataset)
+        self.dataset = dataset
+        self.subClass = subClass
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         lr = 0.0001
@@ -110,12 +129,12 @@ class Server():
 
         self.client_list= []
         for n in range(num_clients):
-            client = Client(self.batch_size, self.num_epochs, self.device, lr, self.loss_function, indice_lists[n])
+            client = Client(self.batch_size, self.num_epochs, self.device, lr, self.loss_function, indice_lists[n], self.dataset, self.subClass)
             self.client_list.append(client)
             print("Added Client", n)
 
     def save_Discriminator_models(self, epoch):
-        dir = 'savedModels/md-gan/epoch{}'.format(epoch)
+        dir = f'savedModels/md-gan/epoch{epoch:03}'
         Path(dir).mkdir(parents=True, exist_ok=True)
         for id, client in enumerate(self.client_list):
             PATH = dir + '/Discriminator{}_state_dict_model.pt'.format(id)
@@ -125,9 +144,22 @@ class Server():
     def split_dataset(self):
         print("Split dataset")
 
-        # download MNIST data
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-        train_set = MNIST(root=".", train=True, download=True, transform=transform)
+        if self.dataset == "MNIST":
+            # download MNIST data
+            transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+            train_set = MNIST(root=".", train=True, download=True, transform=transform)
+
+        if self.dataset == "Fashion":
+            # download Fashion MNIST data
+            transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+            train_set = FashionMNIST(root=".", train=True, download=True, transform=transform)
+
+        if self.subClass != None:
+            print("Class:", self.subClass)
+            # select only data from specific class
+            idx = train_set.targets == self.subClass
+            train_set.targets = train_set.targets[idx]
+            train_set.data = train_set.data[idx]
 
         # split the indices in equal parts according to number of clients
         partition_value = 1 / self.num_clients
@@ -143,9 +175,10 @@ class Server():
         # create lists of the split indices
         indice_lists = [indices[i:i + split] for i in range(0, dataset_size, split)]
 
-        # save indices to file
-        with open("indices.json", 'w') as output_file:
-            json.dump(indice_lists, output_file, indent=2)
+        if not self.enableSwap:
+            # save indices to file
+            with open("indices.json", 'w') as output_file:
+                json.dump(indice_lists, output_file, indent=2)
 
         return indice_lists
         
@@ -243,8 +276,14 @@ if __name__ == '__main__':
     parser.add_argument(
         "-swap", action='store_true'
     )
+    parser.add_argument(
+        "-dataset", type=str, default="MNIST"
+    )
+    parser.add_argument(
+        "-subClass", type=int
+    )
     args = parser.parse_args()
 
-    Server = Server(args.batch_size, args.epochs, args.clients, args.swap)
+    Server = Server(args.batch_size, args.epochs, args.clients, args.swap, args.dataset, args.subClass)
 
     Server.run()
