@@ -41,7 +41,6 @@ class Client():
 
     def createDataLoader(self):
         if self.dataset == "MNIST":
-
             # download MNIST data
             transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
             train_set = MNIST(root=".", train=True, download=True, transform=transform)
@@ -58,9 +57,7 @@ class Client():
             train_set.data = train_set.data[idx]
 
         sampler = SubsetRandomSampler(self.indices)
-        dataLoader = DataLoader(train_set, self.batch_size, sampler=sampler)
-
-        self.dataLoader = dataLoader
+        self.dataLoader = DataLoader(train_set, self.batch_size, sampler=sampler)
 
     def initialize_optimizer(self):
         self.optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=self.lr)
