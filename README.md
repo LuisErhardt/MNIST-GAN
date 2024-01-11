@@ -9,6 +9,8 @@ The attack creates a graph for each discriminators showing the accuracy of the a
 
 ## Installation
 
+The experiments were run with python3.11.
+
 Clone this repository and run `pip install -r requirements.txt`.
 
 ## Train GAN
