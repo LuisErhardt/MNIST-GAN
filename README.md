@@ -9,7 +9,7 @@ The attack creates a graph for each discriminators showing the accuracy of the a
 
 ## Installation
 
-Clone this repository and run `pip install requirements.txt`.
+Clone this repository and run `pip install -r requirements.txt`.
 
 ## Train GAN
 
